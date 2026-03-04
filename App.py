@@ -1,13 +1,12 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import rasterio
-from rasterio.io import MemoryFile
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import tifffile
 
 # ---------- App Title ----------
-st.title("SAR Flood Mapping System")
+st.title("SAR Flood Mapping System (No Rasterio)")
 st.success("App loaded successfully 🚀")
 
 # ---------- File Upload ----------
@@ -17,7 +16,7 @@ ground_truth_file = st.file_uploader("Upload Ground Truth Flood Map (Optional)",
 
 # ---------- Flood Detection Function ----------
 def detect_flood(before, after, threshold=1.25):
-    ratio = after / (before + 1e-6)  # avoid division by zero
+    ratio = after / (before + 1e-6)
     flood_map = ratio > threshold
     return flood_map.astype(np.uint8)
 
@@ -25,6 +24,7 @@ def detect_flood(before, after, threshold=1.25):
 def calculate_metrics(actual, predicted):
     actual_flat = actual.flatten()
     predicted_flat = predicted.flatten()
+    
     if np.sum(actual_flat) == 0:
         return pd.DataFrame({"Warning": ["Ground truth has no flooded pixels"]})
     
@@ -42,20 +42,14 @@ def calculate_metrics(actual, predicted):
 
 # ---------- Main Processing ----------
 if before_file and after_file:
-    # Read "before" SAR image
-    with MemoryFile(before_file.read()) as memfile:
-        with memfile.open() as src:
-            before_img = src.read(1).astype(np.float32)
-
-    # Read "after" SAR image
-    with MemoryFile(after_file.read()) as memfile:
-        with memfile.open() as src:
-            after_img = src.read(1).astype(np.float32)
+    # Read GeoTIFFs as NumPy arrays
+    before_img = tifffile.imread(before_file)
+    after_img = tifffile.imread(after_file)
 
     # Detect flood
     flood_map = detect_flood(before_img, after_img)
 
-    # ---------- Visualization ----------
+    # Visualization
     fig, ax = plt.subplots(1, 3, figsize=(18, 6))
     ax[0].imshow(before_img, cmap="gray")
     ax[0].set_title("Before Flood")
@@ -71,19 +65,16 @@ if before_file and after_file:
 
     st.pyplot(fig)
 
-    # ---------- Flood Area Estimation ----------
-    pixel_resolution = 10  # meters (adjust according to your SAR data)
+    # Flood area estimation
+    pixel_resolution = 10  # meters
     flooded_pixels = np.sum(flood_map)
     flooded_area_km2 = (flooded_pixels * pixel_resolution**2) / 1e6
     st.subheader("Flood Area Estimation")
     st.write(f"Estimated Flooded Area: **{flooded_area_km2:.2f} sq.km**")
 
-    # ---------- Optional Ground Truth Metrics ----------
+    # Optional ground truth metrics
     if ground_truth_file:
-        with MemoryFile(ground_truth_file.read()) as memfile:
-            with memfile.open() as src:
-                ground_truth = src.read(1).astype(np.uint8)
-
+        ground_truth = tifffile.imread(ground_truth_file)
         metrics_df = calculate_metrics(ground_truth, flood_map)
         st.subheader("Flood Detection Metrics")
         st.dataframe(metrics_df)
