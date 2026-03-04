@@ -6,8 +6,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import tifffile
 
 # ---------- App Title ----------
-st.title("SAR Flood Mapping System (No Rasterio)")
-st.success("App loaded successfully 🚀")
+st.title("SAR Flood Mapping System 🚀")
+st.success("App loaded successfully!")
 
 # ---------- File Upload ----------
 before_file = st.file_uploader("Upload Before-Flood SAR Image (GeoTIFF)", type=["tif", "tiff"])
@@ -42,14 +42,17 @@ def calculate_metrics(actual, predicted):
 
 # ---------- Main Processing ----------
 if before_file and after_file:
-    # Read GeoTIFFs as NumPy arrays
+    # Read images as NumPy arrays
     before_img = tifffile.imread(before_file)
     after_img = tifffile.imread(after_file)
 
-    # Detect flood
-    flood_map = detect_flood(before_img, after_img)
+    # ---------- Threshold Slider ----------
+    threshold = st.slider("Flood Detection Threshold", 1.0, 3.0, 1.25, 0.05)
 
-    # Visualization
+    # Detect flood
+    flood_map = detect_flood(before_img, after_img, threshold)
+
+    # ---------- Visualization ----------
     fig, ax = plt.subplots(1, 3, figsize=(18, 6))
     ax[0].imshow(before_img, cmap="gray")
     ax[0].set_title("Before Flood")
@@ -65,14 +68,14 @@ if before_file and after_file:
 
     st.pyplot(fig)
 
-    # Flood area estimation
+    # ---------- Flood Area Estimation ----------
     pixel_resolution = 10  # meters
     flooded_pixels = np.sum(flood_map)
     flooded_area_km2 = (flooded_pixels * pixel_resolution**2) / 1e6
     st.subheader("Flood Area Estimation")
     st.write(f"Estimated Flooded Area: **{flooded_area_km2:.2f} sq.km**")
 
-    # Optional ground truth metrics
+    # ---------- Optional Ground Truth Metrics ----------
     if ground_truth_file:
         ground_truth = tifffile.imread(ground_truth_file)
         metrics_df = calculate_metrics(ground_truth, flood_map)
