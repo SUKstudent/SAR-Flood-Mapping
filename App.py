@@ -2,8 +2,13 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import tifffile
+import io
+
+# ---------- Ensure Matplotlib Compatibility ----------
+matplotlib.use("Agg")
 
 # ---------- App Title ----------
 st.title("SAR Flood Mapping System 🚀")
@@ -43,8 +48,8 @@ def calculate_metrics(actual, predicted):
 # ---------- Main Processing ----------
 if before_file and after_file:
     # Read images as NumPy arrays
-    before_img = tifffile.imread(before_file)
-    after_img = tifffile.imread(after_file)
+    before_img = tifffile.imread(io.BytesIO(before_file.read()))
+    after_img = tifffile.imread(io.BytesIO(after_file.read()))
 
     # ---------- Threshold Slider ----------
     threshold = st.slider("Flood Detection Threshold", 1.0, 3.0, 1.25, 0.05)
@@ -62,11 +67,14 @@ if before_file and after_file:
     ax[1].set_title("After Flood")
     ax[1].axis("off")
 
-    ax[2].imshow(flood_map, cmap="Blues")
-    ax[2].set_title("Detected Flood")
+    # Overlay flood map in red on top of after image
+    ax[2].imshow(after_img, cmap="gray")
+    ax[2].imshow(flood_map, cmap="Reds", alpha=0.5)
+    ax[2].set_title("Detected Flood (Overlay)")
     ax[2].axis("off")
 
     st.pyplot(fig)
+    plt.close(fig)
 
     # ---------- Flood Area Estimation ----------
     pixel_resolution = 10  # meters
@@ -77,7 +85,12 @@ if before_file and after_file:
 
     # ---------- Optional Ground Truth Metrics ----------
     if ground_truth_file:
-        ground_truth = tifffile.imread(ground_truth_file)
-        metrics_df = calculate_metrics(ground_truth, flood_map)
-        st.subheader("Flood Detection Metrics")
-        st.dataframe(metrics_df)
+        ground_truth = tifffile.imread(io.BytesIO(ground_truth_file.read()))
+        ground_truth = (ground_truth > 0).astype(np.uint8)
+
+        if ground_truth.shape != flood_map.shape:
+            st.error("Ground truth and detected flood map dimensions do not match.")
+        else:
+            metrics_df = calculate_metrics(ground_truth, flood_map)
+            st.subheader("Flood Detection Metrics")
+            st.dataframe(metrics_df)
