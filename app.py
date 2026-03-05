@@ -6,14 +6,13 @@ from datetime import date, timedelta
 import json
 
 # ==============================
-# EARTH ENGINE INITIALIZATION (Corrected for Service Account)
+# EARTH ENGINE INITIALIZATION (Service Account Only)
 # ==============================
 
-# Removed ee.Authenticate() completely
 @st.cache_resource
 def init_ee():
     """
-    Initialize Google Earth Engine using Service Account credentials stored in Streamlit secrets.
+    Initialize Earth Engine using Service Account stored in Streamlit secrets.
     """
     service_account_info = json.loads(st.secrets["EE_SERVICE_ACCOUNT"])
 
@@ -25,6 +24,7 @@ def init_ee():
     ee.Initialize(credentials)
     return True
 
+# Initialize EE
 init_ee()
 
 # ==============================
