@@ -5,6 +5,7 @@ from streamlit_folium import st_folium
 import os
 import json
 import tempfile
+from datetime import date, timedelta
 
 # ==== EARTH ENGINE AUTHENTICATION (Service Account) ====
 service_account_info = json.loads(st.secrets["EE_SERVICE_ACCOUNT"])
@@ -14,7 +15,7 @@ with open(service_account_file, "w") as f:
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_file
 ee.Initialize()
 
-# ==== FOLIUM EARTH ENGINE LAYER SUPPORT ====
+# ==== FOLIUM LAYER SUPPORT ====
 def add_ee_layer(self, ee_image, vis_params, name):
     map_id = ee.Image(ee_image).getMapId(vis_params)
     folium.raster_layers.TileLayer(
@@ -42,35 +43,40 @@ if page == "Home":
     """)
     st.markdown("""
     **How to use:**  
-    - In the sidebar, choose **Flood Analysis**.  
-    - Small AOI is already set for faster testing.  
-    - Select pre‑ and post‑flood dates.  
-    - Adjust the threshold if necessary.  
-    - Click **Run Flood Mapping** to generate flood map.  
+    - Go to **Flood Analysis**.  
+    - Default small AOI is set for fast testing.  
+    - Pre/post flood dates are short by default.  
+    - Click **Run Flood Mapping** to see fast results.  
     """)
 
 # ==== FLOOD ANALYSIS PAGE ====
 elif page == "Flood Analysis":
     st.title("Flood Extent Analysis")
 
-    # Sidebar inputs
+    # Default small AOI
+    default_aoi = ee.Geometry.Rectangle([77.5, 28.5, 77.6, 28.6])
+    st.info("Default small AOI is set for instant results.")
+
+    # Short default dates (last week)
+    today = date.today()
+    default_pre_start = today - timedelta(days=14)
+    default_pre_end = today - timedelta(days=8)
+    default_post_start = today - timedelta(days=7)
+    default_post_end = today - timedelta(days=1)
+
     st.sidebar.subheader("Select Dates & Threshold")
-    pre_start = st.sidebar.date_input("Pre‑flood Start")
-    pre_end = st.sidebar.date_input("Pre‑flood End")
-    post_start = st.sidebar.date_input("Post‑flood Start")
-    post_end = st.sidebar.date_input("Post‑flood End")
+    pre_start = st.sidebar.date_input("Pre‑flood Start", default_pre_start)
+    pre_end = st.sidebar.date_input("Pre‑flood End", default_pre_end)
+    post_start = st.sidebar.date_input("Post‑flood Start", default_post_start)
+    post_end = st.sidebar.date_input("Post‑flood End", default_post_end)
     threshold = st.sidebar.slider("Backscatter Threshold", 0.5, 5.0, 1.25)
 
-    # Default small AOI (for instant testing)
-    aoi_geom = ee.Geometry.Rectangle([77.5, 28.5, 77.6, 28.6])
-    st.info("Default AOI is set for fast testing. You can draw a custom AOI if needed.")
-
-    # AOI drawing map
-    st.subheader("Area of Interest (AOI) Map")
+    # AOI map (just for display)
+    st.subheader("Area of Interest (AOI)")
     m = folium.Map(location=[28.55, 77.55], zoom_start=12)
     st_folium(m, width=700, height=400)
 
-    # Cached function to fetch median Sentinel-1 collection
+    # Cached function for fast repeated runs
     @st.cache_data
     def fetch_s1_median(aoi, start, end):
         return (ee.ImageCollection("COPERNICUS/S1_GRD")
@@ -85,11 +91,11 @@ elif page == "Flood Analysis":
     if st.button("Run Flood Mapping"):
         progress = st.progress(0)
         st.info("Fetching pre-flood data…")
-        s1_pre = fetch_s1_median(aoi_geom, pre_start, pre_end)
+        s1_pre = fetch_s1_median(default_aoi, pre_start, pre_end)
         progress.progress(30)
 
         st.info("Fetching post-flood data…")
-        s1_post = fetch_s1_median(aoi_geom, post_start, post_end)
+        s1_post = fetch_s1_median(default_aoi, post_start, post_end)
         progress.progress(60)
 
         st.info("Calculating flood mask…")
@@ -97,14 +103,12 @@ elif page == "Flood Analysis":
         flood_mask = ratio.gt(threshold)
         progress.progress(90)
 
-        # Visualization parameters
-        vis_params = {"min": 1, "max": 3, "palette": ["white", "blue"]}
-
         st.info("Rendering map…")
+        vis_params = {"min": 1, "max": 3, "palette": ["white", "blue"]}
         flood_map = folium.Map(location=[28.55, 77.55], zoom_start=12)
         flood_map.add_ee_layer(flood_mask.selfMask(), vis_params, "Flood Extent")
         progress.progress(100)
 
         st.subheader("Flood Extent Map")
         st_folium(flood_map, width=700, height=500)
-        st.success("Flood mapping complete!")
+        st.success("Flood mapping complete! ✅")
