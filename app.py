@@ -15,7 +15,7 @@ st.set_page_config(layout="wide", page_title=params["browser_title"])
 toggle_menu_button()
 
 # Create sidebar
-add_logo("app/img/MA-logo.png")
+add_logo("MA-logo.png")  # ✅ Updated path since logo is in root
 add_about()
 
 # Set page style
