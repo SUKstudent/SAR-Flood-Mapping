@@ -4,17 +4,15 @@ import folium
 from streamlit_folium import st_folium
 import os
 import json
+import tempfile
 
 # ==== EARTH ENGINE AUTHENTICATION (Service Account) ====
-# Store your service account JSON in Streamlit Secrets as EE_SERVICE_ACCOUNT
+# Load service account from Streamlit secrets
 service_account_info = json.loads(st.secrets["EE_SERVICE_ACCOUNT"])
-service_account_file = "/tmp/service_account.json"
+service_account_file = os.path.join(tempfile.gettempdir(), "service_account.json")
 with open(service_account_file, "w") as f:
     json.dump(service_account_info, f)
-
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_file
-
-# Initialize Earth Engine
 ee.Initialize()
 
 # ==== FOLIUM EARTH ENGINE LAYER SUPPORT ====
@@ -27,7 +25,6 @@ def add_ee_layer(self, ee_image, vis_params, name):
         overlay=True,
         control=True
     ).add_to(self)
-
 folium.Map.add_ee_layer = add_ee_layer
 
 # ==== STREAMLIT PAGE CONFIG ====
@@ -42,13 +39,12 @@ if page == "Home":
     st.markdown("""
     This tool estimates flood extent using Sentinel‑1 SAR imagery and the
     Google Earth Engine Python API (EE API). Flood extent is calculated
-    by comparing radar backscatter before and after an event and applying
-    a threshold.
+    by comparing radar backscatter before and after an event.
     """)
     st.markdown("""
     **How to use:**  
     - In the sidebar, choose **Flood Analysis**.  
-    - Draw an area of interest (AOI) on the map.  
+    - Draw a small Area of Interest (AOI) for faster results.  
     - Select pre‑ and post‑flood dates.  
     - Adjust the threshold if necessary.  
     - Click **Run Flood Mapping** to generate flood map.  
@@ -76,45 +72,47 @@ elif page == "Flood Analysis":
         coords = map_data["last_active_drawing"]["geometry"]["coordinates"][0]
         minx, miny = min(p[0] for p in coords), min(p[1] for p in coords)
         maxx, maxy = max(p[0] for p in coords), max(p[1] for p in coords)
+        # Warn user if AOI is too large
+        if (maxx - minx) * (maxy - miny) > 1.0:
+            st.warning("AOI is large! Consider using a smaller area for faster results.")
         aoi_geom = ee.Geometry.Rectangle([minx, miny, maxx, maxy])
         st.success(f"AOI set: {minx:.2f}, {miny:.2f} to {maxx:.2f}, {maxy:.2f}")
 
+    # Cached function to fetch median Sentinel-1 collection
+    @st.cache_data
+    def fetch_s1_median(aoi, start, end):
+        return (ee.ImageCollection("COPERNICUS/S1_GRD")
+                .filterBounds(aoi)
+                .filterDate(str(start), str(end))
+                .filter(ee.Filter.eq("instrumentMode", "IW"))
+                .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
+                .filter(ee.Filter.eq("orbitProperties_pass", "ASCENDING"))
+                .median())
+
     # Run flood mapping
     if st.button("Run Flood Mapping") and aoi_geom:
-        st.info("Fetching and processing data…")
+        progress = st.progress(0)
+        st.info("Fetching pre-flood data…")
+        s1_pre = fetch_s1_median(aoi_geom, pre_start, pre_end)
+        progress.progress(30)
 
-        # Sentinel‑1 collection before flood
-        s1_pre = (
-            ee.ImageCollection("COPERNICUS/S1_GRD")
-            .filterBounds(aoi_geom)
-            .filterDate(str(pre_start), str(pre_end))
-            .filter(ee.Filter.eq("instrumentMode", "IW"))
-            .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
-            .filter(ee.Filter.eq("orbitProperties_pass", "ASCENDING"))
-            .median()
-        )
+        st.info("Fetching post-flood data…")
+        s1_post = fetch_s1_median(aoi_geom, post_start, post_end)
+        progress.progress(60)
 
-        # Sentinel‑1 collection after flood
-        s1_post = (
-            ee.ImageCollection("COPERNICUS/S1_GRD")
-            .filterBounds(aoi_geom)
-            .filterDate(str(post_start), str(post_end))
-            .filter(ee.Filter.eq("instrumentMode", "IW"))
-            .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
-            .filter(ee.Filter.eq("orbitProperties_pass", "ASCENDING"))
-            .median()
-        )
-
-        # Flood mask using ratio and threshold
+        st.info("Calculating flood mask…")
         ratio = s1_post.select("VV").divide(s1_pre.select("VV"))
         flood_mask = ratio.gt(threshold)
+        progress.progress(90)
 
         # Visualization parameters
         vis_params = {"min": 1, "max": 3, "palette": ["white", "blue"]}
 
-        # Map for displaying flood
+        st.info("Rendering map…")
         flood_map = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], zoom_start=8)
         flood_map.add_ee_layer(flood_mask.selfMask(), vis_params, "Flood Extent")
+        progress.progress(100)
 
         st.subheader("Flood Extent Map")
         st_folium(flood_map, width=700, height=500)
+        st.success("Flood mapping complete!")
