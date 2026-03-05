@@ -7,7 +7,6 @@ import json
 import tempfile
 
 # ==== EARTH ENGINE AUTHENTICATION (Service Account) ====
-# Load service account from Streamlit secrets
 service_account_info = json.loads(st.secrets["EE_SERVICE_ACCOUNT"])
 service_account_file = os.path.join(tempfile.gettempdir(), "service_account.json")
 with open(service_account_file, "w") as f:
@@ -44,7 +43,7 @@ if page == "Home":
     st.markdown("""
     **How to use:**  
     - In the sidebar, choose **Flood Analysis**.  
-    - Draw a small Area of Interest (AOI) for faster results.  
+    - Small AOI is already set for faster testing.  
     - Select pre‑ and post‑flood dates.  
     - Adjust the threshold if necessary.  
     - Click **Run Flood Mapping** to generate flood map.  
@@ -62,21 +61,14 @@ elif page == "Flood Analysis":
     post_end = st.sidebar.date_input("Post‑flood End")
     threshold = st.sidebar.slider("Backscatter Threshold", 0.5, 5.0, 1.25)
 
-    # AOI drawing map
-    st.subheader("Draw Area of Interest (AOI)")
-    m = folium.Map(location=[0, 0], zoom_start=2)
-    map_data = st_folium(m, width=700, height=400, returned_objects=['last_active_drawing'])
+    # Default small AOI (for instant testing)
+    aoi_geom = ee.Geometry.Rectangle([77.5, 28.5, 77.6, 28.6])
+    st.info("Default AOI is set for fast testing. You can draw a custom AOI if needed.")
 
-    aoi_geom = None
-    if map_data.get("last_active_drawing"):
-        coords = map_data["last_active_drawing"]["geometry"]["coordinates"][0]
-        minx, miny = min(p[0] for p in coords), min(p[1] for p in coords)
-        maxx, maxy = max(p[0] for p in coords), max(p[1] for p in coords)
-        # Warn user if AOI is too large
-        if (maxx - minx) * (maxy - miny) > 1.0:
-            st.warning("AOI is large! Consider using a smaller area for faster results.")
-        aoi_geom = ee.Geometry.Rectangle([minx, miny, maxx, maxy])
-        st.success(f"AOI set: {minx:.2f}, {miny:.2f} to {maxx:.2f}, {maxy:.2f}")
+    # AOI drawing map
+    st.subheader("Area of Interest (AOI) Map")
+    m = folium.Map(location=[28.55, 77.55], zoom_start=12)
+    st_folium(m, width=700, height=400)
 
     # Cached function to fetch median Sentinel-1 collection
     @st.cache_data
@@ -90,7 +82,7 @@ elif page == "Flood Analysis":
                 .median())
 
     # Run flood mapping
-    if st.button("Run Flood Mapping") and aoi_geom:
+    if st.button("Run Flood Mapping"):
         progress = st.progress(0)
         st.info("Fetching pre-flood data…")
         s1_pre = fetch_s1_median(aoi_geom, pre_start, pre_end)
@@ -109,7 +101,7 @@ elif page == "Flood Analysis":
         vis_params = {"min": 1, "max": 3, "palette": ["white", "blue"]}
 
         st.info("Rendering map…")
-        flood_map = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], zoom_start=8)
+        flood_map = folium.Map(location=[28.55, 77.55], zoom_start=12)
         flood_map.add_ee_layer(flood_mask.selfMask(), vis_params, "Flood Extent")
         progress.progress(100)
 
