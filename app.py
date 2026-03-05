@@ -19,7 +19,8 @@ st.write("Rasterio version:", rasterio.__version__)
 toggle_menu_button()
 
 # Create sidebar
-add_logo("app/img/MA-logo.png")
+# Updated to look for the file in your root directory
+add_logo("MA-logo.png")
 add_about()
 
 # Set page style
