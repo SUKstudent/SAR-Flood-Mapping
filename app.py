@@ -8,9 +8,12 @@ from src.utils import (
     set_home_page_style,
     toggle_menu_button,
 )
-st.write("Rasterio version:", rasterio.__version__)
-# Page configuration
+
+# --- PAGE CONFIGURATION MUST BE FIRST ---
 st.set_page_config(layout="wide", page_title=params["browser_title"])
+
+# Now other Streamlit commands can follow
+st.write("Rasterio version:", rasterio.__version__)
 
 # If app is deployed hide menu button
 toggle_menu_button()
@@ -133,7 +136,4 @@ st.markdown(
     </p>
     """,
     unsafe_allow_html=True,
-)  
-
-
-
+)
