@@ -2,16 +2,22 @@ import streamlit as st
 import ee
 import folium
 from streamlit_folium import st_folium
-from shapely.geometry import box
+import os
+import json
+
+# ==== EARTH ENGINE AUTHENTICATION (Service Account) ====
+# Store your service account JSON in Streamlit Secrets as EE_SERVICE_ACCOUNT
+service_account_info = json.loads(st.secrets["EE_SERVICE_ACCOUNT"])
+service_account_file = "/tmp/service_account.json"
+with open(service_account_file, "w") as f:
+    json.dump(service_account_info, f)
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_file
 
 # Initialize Earth Engine
-try:
-    ee.Initialize()
-except Exception:
-    ee.Authenticate()
-    ee.Initialize()
+ee.Initialize()
 
-# Add EE layer support to folium
+# ==== FOLIUM EARTH ENGINE LAYER SUPPORT ====
 def add_ee_layer(self, ee_image, vis_params, name):
     map_id = ee.Image(ee_image).getMapId(vis_params)
     folium.raster_layers.TileLayer(
@@ -24,7 +30,7 @@ def add_ee_layer(self, ee_image, vis_params, name):
 
 folium.Map.add_ee_layer = add_ee_layer
 
-# Streamlit page config
+# ==== STREAMLIT PAGE CONFIG ====
 st.set_page_config(layout="wide", page_title="SAR Flood Mapping")
 
 # Sidebar navigation
