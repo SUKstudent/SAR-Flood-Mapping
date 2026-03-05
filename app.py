@@ -1,5 +1,6 @@
 """Home page for Streamlit app."""
 import streamlit as st
+import rasterio
 from src.config_parameters import params
 from src.utils import (
     add_about,
@@ -7,7 +8,7 @@ from src.utils import (
     set_home_page_style,
     toggle_menu_button,
 )
-
+st.write("Rasterio version:", rasterio.__version__)
 # Page configuration
 st.set_page_config(layout="wide", page_title=params["browser_title"])
 
@@ -133,5 +134,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )  
+
 
 
